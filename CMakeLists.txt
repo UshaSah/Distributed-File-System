@@ -1,0 +1,84 @@
+cmake_minimum_required(VERSION 3.16)
+project(DistributedFileSystem VERSION 1.0.0 LANGUAGES CXX)
+
+# Set C++ standard
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_EXTENSIONS OFF)
+
+# Use Homebrew GCC if available
+if(EXISTS "/usr/local/bin/g++-15")
+    set(CMAKE_CXX_COMPILER "/usr/local/bin/g++-15")
+    set(CMAKE_C_COMPILER "/usr/local/bin/gcc-15")
+endif()
+
+# Set build type if not specified
+if(NOT CMAKE_BUILD_TYPE)
+    set(CMAKE_BUILD_TYPE Release)
+endif()
+
+# Compiler-specific options
+if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU" OR CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Wextra -Wpedantic")
+    set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -g -O0 -DDEBUG")
+    set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -O3 -DNDEBUG")
+endif()
+
+# Set output directories
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
+set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
+set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
+
+# Include directories
+include_directories(${CMAKE_SOURCE_DIR}/include)
+
+# Find required packages
+find_package(Threads REQUIRED)
+
+# Source files
+set(CORE_SOURCES
+    src/core/superblock.cpp
+    src/core/inode.cpp
+    src/core/block_manager.cpp
+    src/core/transaction_manager.cpp
+)
+
+set(UTILS_SOURCES
+    src/utils/thread_pool.cpp
+    src/utils/rate_limiter.cpp
+    src/utils/retry_handler.cpp
+    src/utils/logger.cpp
+    src/utils/exceptions.cpp
+)
+
+# Create core library
+add_library(dfs_core STATIC ${CORE_SOURCES})
+target_link_libraries(dfs_core 
+    Threads::Threads
+)
+
+# Create utils library
+add_library(dfs_utils STATIC ${UTILS_SOURCES})
+target_link_libraries(dfs_utils 
+    Threads::Threads
+)
+
+# Testing
+enable_testing()
+
+# Find Google Test
+find_package(GTest QUIET)
+if(GTest_FOUND)
+    # Unit tests
+    add_subdirectory(tests/unit)
+else()
+    message(WARNING "Google Test not found, skipping unit tests")
+endif()
+
+# Print configuration summary
+message(STATUS "=== Configuration Summary ===")
+message(STATUS "Build type: ${CMAKE_BUILD_TYPE}")
+message(STATUS "C++ standard: ${CMAKE_CXX_STANDARD}")
+message(STATUS "Compiler: ${CMAKE_CXX_COMPILER_ID} ${CMAKE_CXX_COMPILER_VERSION}")
+message(STATUS "Install prefix: ${CMAKE_INSTALL_PREFIX}")
+message(STATUS "==============================")
