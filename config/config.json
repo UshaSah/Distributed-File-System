@@ -1,0 +1,78 @@
+{
+    "server": {
+        "host": "0.0.0.0",
+        "port": 8080,
+        "max_connections": 1000,
+        "request_timeout_seconds": 30,
+        "enable_ssl": false,
+        "ssl_cert_path": "",
+        "ssl_key_path": "",
+        "enable_cors": true,
+        "cors_origin": "*"
+    },
+    "filesystem": {
+        "device_path": "/tmp/dfs_device",
+        "total_blocks": 1000000,
+        "block_size": 4096,
+        "max_inodes": 100000,
+        "enable_compression": false,
+        "enable_encryption": false,
+        "replication_factor": 3
+    },
+    "threading": {
+        "min_threads": 2,
+        "max_threads": 16,
+        "thread_timeout_seconds": 300,
+        "enable_work_stealing": true
+    },
+    "rate_limiting": {
+        "enabled": true,
+        "max_requests_per_second": 100,
+        "burst_capacity": 200,
+        "window_size_seconds": 1,
+        "enable_per_client_limits": true
+    },
+    "retry": {
+        "max_retries": 3,
+        "initial_delay_ms": 100,
+        "max_delay_ms": 5000,
+        "backoff_multiplier": 2.0,
+        "enable_jitter": true,
+        "circuit_breaker_timeout_seconds": 60,
+        "circuit_breaker_failure_threshold": 5
+    },
+    "logging": {
+        "level": "INFO",
+        "log_file_path": "logs/dfs.log",
+        "enable_console_output": true,
+        "enable_file_output": true,
+        "enable_async_logging": true,
+        "max_log_file_size_mb": 10,
+        "max_log_files": 5,
+        "log_rotation_interval_hours": 24
+    },
+    "transactions": {
+        "timeout_seconds": 30,
+        "enable_wal": true,
+        "wal_file_path": "logs/transaction.log",
+        "checkpoint_interval_seconds": 300
+    },
+    "monitoring": {
+        "enable_metrics": true,
+        "metrics_port": 9090,
+        "enable_health_checks": true,
+        "health_check_interval_seconds": 30
+    },
+    "security": {
+        "enable_authentication": false,
+        "api_key_required": false,
+        "allowed_ips": [],
+        "enable_audit_logging": false
+    },
+    "performance": {
+        "enable_caching": true,
+        "cache_size_mb": 100,
+        "enable_prefetching": true,
+        "prefetch_size_kb": 64
+    }
+}

@@ -1,0 +1,205 @@
+version: '3.8'
+
+services:
+  # Distributed File System Server
+  dfs-server:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+      target: runtime
+    container_name: dfs-server
+    hostname: dfs-server
+    ports:
+      - "8080:8080"  # REST API
+      - "9090:9090"  # Metrics
+    volumes:
+      - dfs_data:/var/lib/dfs
+      - dfs_logs:/var/log/dfs
+      - ./config/config.json:/etc/dfs/config.json:ro
+    environment:
+      - DFS_LOG_LEVEL=INFO
+      - DFS_CONFIG_PATH=/etc/dfs/config.json
+      - DFS_DATA_PATH=/var/lib/dfs
+      - DFS_LOG_PATH=/var/log/dfs
+    networks:
+      - dfs-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "/usr/local/bin/dfs-client", "health-check"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    depends_on:
+      - dfs-metrics
+    command: ["server"]
+
+  # Metrics and Monitoring
+  dfs-metrics:
+    image: prom/prometheus:latest
+    container_name: dfs-metrics
+    hostname: dfs-metrics
+    ports:
+      - "9091:9090"
+    volumes:
+      - ./docker/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    networks:
+      - dfs-network
+    restart: unless-stopped
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/etc/prometheus/console_libraries'
+      - '--web.console.templates=/etc/prometheus/consoles'
+      - '--storage.tsdb.retention.time=200h'
+      - '--web.enable-lifecycle'
+
+  # Logging
+  dfs-logs:
+    image: grafana/loki:latest
+    container_name: dfs-logs
+    hostname: dfs-logs
+    ports:
+      - "3100:3100"
+    volumes:
+      - loki_data:/loki
+      - ./docker/loki.yml:/etc/loki/local-config.yaml:ro
+    networks:
+      - dfs-network
+    restart: unless-stopped
+    command: -config.file=/etc/loki/local-config.yaml
+
+  # Visualization
+  dfs-dashboard:
+    image: grafana/grafana:latest
+    container_name: dfs-dashboard
+    hostname: dfs-dashboard
+    ports:
+      - "3000:3000"
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./docker/grafana/datasources:/etc/grafana/provisioning/datasources:ro
+      - ./docker/grafana/dashboards:/etc/grafana/provisioning/dashboards:ro
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_USERS_ALLOW_SIGN_UP=false
+    networks:
+      - dfs-network
+    restart: unless-stopped
+    depends_on:
+      - dfs-metrics
+      - dfs-logs
+
+  # Load Balancer (for multiple server instances)
+  dfs-lb:
+    image: nginx:alpine
+    container_name: dfs-lb
+    hostname: dfs-lb
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./docker/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./docker/ssl:/etc/nginx/ssl:ro
+    networks:
+      - dfs-network
+    restart: unless-stopped
+    depends_on:
+      - dfs-server
+    profiles:
+      - production
+
+  # Development environment
+  dfs-dev:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+      target: development
+    container_name: dfs-dev
+    hostname: dfs-dev
+    ports:
+      - "8081:8080"
+      - "9092:9090"
+    volumes:
+      - ..:/app
+      - dfs_dev_data:/var/lib/dfs
+      - dfs_dev_logs:/var/log/dfs
+    environment:
+      - DFS_LOG_LEVEL=DEBUG
+      - DFS_CONFIG_PATH=/app/config/config.json
+    networks:
+      - dfs-network
+    restart: unless-stopped
+    profiles:
+      - development
+    command: ["/bin/bash"]
+
+  # Testing environment
+  dfs-test:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+      target: testing
+    container_name: dfs-test
+    hostname: dfs-test
+    volumes:
+      - ..:/app
+      - test_results:/app/test-results
+    environment:
+      - DFS_LOG_LEVEL=DEBUG
+      - DFS_CONFIG_PATH=/app/config/config.json
+    networks:
+      - dfs-network
+    profiles:
+      - testing
+    command: ["python3", "-m", "pytest", "tests/", "-v", "--cov=src", "--cov-report=html:test-results/coverage"]
+
+  # Client for testing
+  dfs-client:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+      target: runtime
+    container_name: dfs-client
+    hostname: dfs-client
+    volumes:
+      - client_data:/var/lib/dfs-client
+    environment:
+      - DFS_SERVER_HOST=dfs-server
+      - DFS_SERVER_PORT=8080
+      - DFS_LOG_LEVEL=INFO
+    networks:
+      - dfs-network
+    depends_on:
+      - dfs-server
+    profiles:
+      - client
+    command: ["client"]
+
+volumes:
+  dfs_data:
+    driver: local
+  dfs_logs:
+    driver: local
+  dfs_dev_data:
+    driver: local
+  dfs_dev_logs:
+    driver: local
+  client_data:
+    driver: local
+  prometheus_data:
+    driver: local
+  loki_data:
+    driver: local
+  grafana_data:
+    driver: local
+  test_results:
+    driver: local
+
+networks:
+  dfs-network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16
